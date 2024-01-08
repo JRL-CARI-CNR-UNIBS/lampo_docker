@@ -1,5 +1,8 @@
 FROM navigation2:rolling
 
+ARG set__ros_domain_id=15
+ARG set__gz_version=harmonic
+
 RUN mkdir -p /home/gino/.gz/fuel
 COPY ./fuel /home/gino/.gz/fuel
 
@@ -10,7 +13,7 @@ RUN sudo wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrin
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null &&\
     sudo apt-get update &&\
     sudo apt-get install -y gz-harmonic ros-rolling-rviz2
-ENV GZ_VERSION harmonic
+ENV GZ_VERSION ${set__gz_version}
 
 # Roba varia
 RUN apt-get install -y  ros-rolling-backward-ros\
@@ -47,4 +50,4 @@ RUN mkdir -p /home/gino/ROS/lampo_ws_ros2_rolling/install/lampo_description/shar
 RUN sed --in-place \
       -e 's|^source .*|source "/opt/lampo_ws/install/setup.bash"|' \
       /ros_entrypoint.sh
-ENV ROS_DOMAIN_ID 15
+ENV ROS_DOMAIN_ID ${set__ros_domain_id}
