@@ -1,10 +1,6 @@
-FROM navigation2:rolling
+FROM navigation2:rolling AS dependencies
 
-ARG set__ros_domain_id=15
 ARG set__gz_version=harmonic
-
-RUN mkdir -p /home/gino/.gz/fuel
-COPY ./fuel /home/gino/.gz/fuel
 
 # GUI: Gazebo e RViz2
 RUN sudo apt-get update
@@ -31,23 +27,42 @@ RUN apt-get install -y  ros-rolling-backward-ros\
                                           ros-rolling-tf2-msgs\
                                           ros-rolling-trajectory-msgs\
                                           ros-rolling-vision-msgs\
+                                          ros-rolling-topic-based-ros2-control\
                                           xterm
+
+#--------------------------------------------------------------------------------
+FROM dependencies AS setup
 
 WORKDIR /opt
 RUN mkdir -p lampo_ws/src
+WORKDIR /opt/lampo_ws/src
+COPY ./src .
+RUN git clone https://github.com/ros-controls/gz_ros2_control\
+    && git clone https://github.com/ros-controls/ros2_control && cd ros2_control && git checkout 4.3.0
+RUN git clone https://github.com/ros-controls/ros2_controllers.git && cd ros2_controllers && git checkout 4.4.0
+RUN git clone https://github.com/gazebosim/ros_gz.git -b iron
+RUN git clone https://github.com/ros-controls/kinematics_interface.git && cd kinematics_interface && git checkout 1.0.0
+RUN git clone https://github.com/ros-controls/control_msgs.git
+RUN git clone https://github.com/ros-drivers/ackermann_msgs.git && cd ackermann_msgs && git checkout ros2
 
 WORKDIR /opt/lampo_ws
-COPY ./src ./src
-RUN cd src\
-    && git clone https://github.com/ros-controls/gz_ros2_control\
-    && apt-get install -y ros-rolling-ros2-control
-RUN cd ./src && git clone https://github.com/gazebosim/ros_gz.git -b iron
-RUN . /opt/overlay_ws/install/setup.sh && colcon build --symlink-install --continue-on-error --cmake-args -DCMAKE_CXX_FLAGS="-w"
-RUN mkdir -p /home/gino/ROS/lampo_ws_ros2_rolling/install/ur_description/share/ \
-    && cp -r /opt/ros/rolling/share/ur_description /home/gino/ROS/lampo_ws_ros2_rolling/install/ur_description/share/
-RUN mkdir -p /home/gino/ROS/lampo_ws_ros2_rolling/install/lampo_description/share/ \
-    && ln -s /opt/lampo_ws/install/lampo_description/share/lampo_description /home/gino/ROS/lampo_ws_ros2_rolling/install/lampo_description/share/lampo_description
+
+#--------------------------------------------------------------------------------
+FROM setup AS build
+
+ARG set__ros_domain_id=15
+ARG set__home_dir=stefanomutti
+
+RUN . /opt/overlay_ws/install/setup.sh && colcon build --symlink-install --cmake-args -DCMAKE_CXX_FLAGS="-w"
+RUN mkdir -p /home/${set__home_dir}/.gz/fuel
+COPY ./fuel /home/${set__home_dir}/.gz/fuel
+RUN mkdir -p /home/${set__home_dir}/lampo_ws/install/ur_description/share/ \
+    && cp -r /opt/ros/rolling/share/ur_description /home/${set__home_dir}/lampo_ws/install/ur_description/share/
+RUN mkdir -p /home/${set__home_dir}/lampo_ws/install/lampo_description/share/ \
+    && ln -s /opt/lampo_ws/install/lampo_description/share/lampo_description /home/${set__home_dir}/lampo_ws/install/lampo_description/share/lampo_description
 RUN sed --in-place \
       -e 's|^source .*|source "/opt/lampo_ws/install/setup.bash"|' \
       /ros_entrypoint.sh
 ENV ROS_DOMAIN_ID ${set__ros_domain_id}
+
+CMD ["echo","rocker","--x11","--volume","fuel:/home/stefanomutti/.gz/fuel:ro", "", "--", "lampo", "/bin/bash"]
